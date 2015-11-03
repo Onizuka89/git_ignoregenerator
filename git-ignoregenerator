@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+set -e
+
+DEBUG=true
+
+GITIGNORE_LOCAL_REPO="$HOME/.ignore_generator"
+IGNORE_GENERATOR_FILE=".ignore_generator"
+GITIGNORE_REMOTE_REPO="https://github.com/github/gitignore.git"
+
+
+START="##### GENERATED START #####"
+END="##### GENERATED END #####"
+#IFS='\n'
+
+function debug {
+  if $DEBUG; then
+    echo $1
+  fi
+}
+
+
+
+(
+if [[ ! -d $GITIGNORE_LOCAL_REPO  ]]; then
+  echo "created home"
+  mkdir $GITIGNORE_LOCAL_REPO
+  git clone $GITIGNORE_REMOTE_REPO $GITIGNORE_LOCAL_REPO
+elif [[ ! -d $GITIGNORE_LOCAL_REPO/.git ]]; then
+  git clone $GITIGNORE_REMOTE_REPO $GITIGNORE_LOCAL_REPO
+else 
+  if [[ $1 == "upgrade" ]]; then
+    cd $GITIGNORE_LOCAL_REPO
+    git pull
+    exit
+  fi
+fi
+
+if [[ ! -d $GITIGNORE_LOCAL_REPO ]]; then
+  exit
+fi
+)
+
+
+if [[ $1 == "update" ]]; then
+  # Clean out old generated content.
+  if [[ -f ".gitignore" ]]; then
+    gen=false
+    touch .tmp
+    while read i; do
+
+      if [[ "$i" == "$START" ]]; then
+        debug "Start found"
+        gen=true
+      elif [[ "$i" == "$END" ]]; then
+        debug "End found"
+        gen=false
+      fi
+
+      if ! $gen; then
+        if [[ "$i" != "$END" ]]; then
+          echo $i >> ./.tmp
+        fi
+      fi
+    done < .gitignore
+    mv .tmp .gitignore
+  else
+    touch .gitignore
+  fi
+
+  if [[ -f "$IGNORE_GENERATOR_FILE" ]]; then
+    found=false
+    while read i; do
+      #TODO: Trim $i
+      #TODO check if a specific commit is wanted for entry
+      if [[ $i == "" ]]; then
+        continue
+      fi
+      if [[ -f "$GITIGNORE_LOCAL_REPO/$i.gitignore" ]]; then
+        if ! $found; then
+          echo $START >> .gitignore
+          found=true
+        fi
+        echo "$GITIGNORE_LOCAL_REPO/$i.gitignore"
+        cat $GITIGNORE_LOCAL_REPO/$i.gitignore >> .gitignore
+        echo '' >> .gitignore
+      fi
+    done < $IGNORE_GENERATOR_FILE
+    if $found; then
+      echo "$END" >> .gitignore
+    fi
+  else
+    echo "Nothing can be done. You don't have a $IGNORE_GENERATOR_FILE file."
+  fi
+fi
